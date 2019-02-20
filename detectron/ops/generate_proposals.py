@@ -1,16 +1,11 @@
-# Copyright (c) 2017-present, Facebook, Inc.
+
+# Copyright (c) Facebook, Inc. and its affiliates.
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+
 ##############################################################################
 #
 # Based on:
@@ -30,17 +25,13 @@ import detectron.utils.boxes as box_utils
 class GenerateProposalsOp(object):
     """Output object detection proposals by applying estimated bounding-box
     transformations to a set of regular boxes (called "anchors").
-
-    See comment in utils/boxes:bbox_transform_inv for details abouts the
-    optional `reg_weights` parameter.
     """
 
-    def __init__(self, anchors, spatial_scale, train, reg_weights=(1.0, 1.0, 1.0, 1.0)):
+    def __init__(self, anchors, spatial_scale, train):
         self._anchors = anchors
         self._num_anchors = self._anchors.shape[0]
         self._feat_stride = 1. / spatial_scale
         self._train = train
-        self._reg_weights = reg_weights
 
     def forward(self, inputs, outputs):
         """See modeling.detector.GenerateProposals for inputs/outputs
@@ -148,7 +139,8 @@ class GenerateProposalsOp(object):
         scores = scores[order]
 
         # Transform anchors into proposals via bbox transformations
-        proposals = box_utils.bbox_transform(all_anchors, bbox_deltas, self._reg_weights)
+        proposals = box_utils.bbox_transform(
+            all_anchors, bbox_deltas, (1.0, 1.0, 1.0, 1.0))
 
         # 2. clip proposals to image (may result in proposals with zero area
         # that will be removed in the next step)
@@ -174,6 +166,7 @@ class GenerateProposalsOp(object):
 def _filter_boxes(boxes, min_size, im_info):
     """Only keep boxes with both sides >= min_size and center within the image.
     """
+
     # Compute the width and height of the proposal boxes as measured in the original
     # image coordinate system (this is required to avoid "Negative Areas Found"
     # assertions in other parts of the code that measure).

@@ -1,11 +1,9 @@
-# Contributing to Detectron
+# Contributing to DensePose
 We want to make contributing to this project as easy and transparent as
 possible.
 
 ## Our Development Process
-Minor changes and improvements will be released on an ongoing basis. Larger
-changes (e.g., changesets implementing a new paper) will be released on a more
-periodic basis.
+Minor changes and improvements will be released on an ongoing basis.
 
 ## Pull Requests
 We actively welcome your pull requests.
@@ -15,8 +13,7 @@ We actively welcome your pull requests.
 3. If you've changed APIs, update the documentation.
 4. Ensure the test suite passes.
 5. Make sure your code lints.
-6. Ensure no regressions in baseline model speed and accuracy.
-7. If you haven't already, complete the Contributor License Agreement ("CLA").
+6. If you haven't already, complete the Contributor License Agreement ("CLA").
 
 ## Contributor License Agreement ("CLA")
 In order to accept your pull request, we need you to submit a CLA. You only need
@@ -25,9 +22,8 @@ to do this once to work on any of Facebook's open source projects.
 Complete your CLA here: <https://code.facebook.com/cla>
 
 ## Issues
-GitHub issues will be largely unattended and are mainly intended as a community
-forum for collectively debugging issues, hopefully leading to pull requests with
-fixes when appropriate.
+We use GitHub issues to track public bugs. Please ensure your description is
+clear and has sufficient instructions to be able to reproduce the issue.
 
 ## Coding Style  
 * 4 spaces for indentation rather than tabs
@@ -35,5 +31,6 @@ fixes when appropriate.
 * PEP8 formatting
 
 ## License
-By contributing to Detectron, you agree that your contributions will be licensed
+By contributing to DensePose, you agree that your contributions will be licensed
 under the LICENSE file in the root directory of this source tree.
+

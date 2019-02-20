@@ -1,16 +1,8 @@
-# Copyright (c) 2017-present, Facebook, Inc.
+# Copyright (c) Facebook, Inc. and its affiliates.
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
 ##############################################################################
 #
 # Based on:
@@ -41,16 +33,17 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
-
+import io
+import six
 from ast import literal_eval
 from future.utils import iteritems
+from past.builtins import basestring
 import copy
-import io
 import logging
 import numpy as np
 import os
 import os.path as osp
-import six
+import yaml
 
 from detectron.utils.collections import AttrDict
 from detectron.utils.io import cache_url
@@ -61,6 +54,7 @@ __C = AttrDict()
 # Consumers can get config by:
 #   from detectron.core.config import cfg
 cfg = __C
+
 
 # Random note: avoid using '.ON' as a config key since yaml converts it to True;
 # prefer 'ENABLED' instead
@@ -187,12 +181,6 @@ __C.TRAIN.FREEZE_CONV_BODY = False
 # Training will resume from the latest snapshot (model checkpoint) found in the
 # output directory
 __C.TRAIN.AUTO_RESUME = True
-
-# Training will copy TRAIN.WEIGHTS and treat it as a candidate checkpoint
-__C.TRAIN.COPY_WEIGHTS = False
-
-# Add StopGrad at a specified stage so the bottom layers are frozen
-__C.TRAIN.FREEZE_AT = 2
 
 
 # ---------------------------------------------------------------------------- #
@@ -475,6 +463,9 @@ __C.MODEL.MASK_ON = False
 # Indicates the model makes keypoint predictions (as in Mask R-CNN for
 # keypoints)
 __C.MODEL.KEYPOINTS_ON = False
+
+# Indicates the model makes body UV predictions (as in DensePose R-CNN)
+__C.MODEL.BODY_UV_ON = False
 
 # Indicates the model's computation terminates with the production of RPN
 # proposals (i.e., it outputs proposals ONLY, no actual object detections)
@@ -781,7 +772,7 @@ __C.MRCNN.THRESH_BINARIZE = 0.5
 
 
 # ---------------------------------------------------------------------------- #
-# Keypoint Mask R-CNN options ("KRCNN" = Mask R-CNN with Keypoint support)
+# Keyoint Mask R-CNN options ("KRCNN" = Mask R-CNN with Keypoint support)
 # ---------------------------------------------------------------------------- #
 __C.KRCNN = AttrDict()
 
@@ -829,7 +820,7 @@ __C.KRCNN.CONV_INIT = 'GaussianFill'
 __C.KRCNN.NMS_OKS = False
 
 # Source of keypoint confidence
-#   Valid options: ('bbox', 'logit', 'prob')
+#   Valid options: ('bbox', 'logit', 'pro')
 __C.KRCNN.KEYPOINT_CONFIDENCE = 'bbox'
 
 # Standard ROI XFORM options (see FAST_RCNN or MRCNN options)
@@ -856,6 +847,57 @@ __C.KRCNN.LOSS_WEIGHT = 1.0
 # in the minibatch. See comments in modeling.model_builder.add_keypoint_losses
 # for detailed discussion.
 __C.KRCNN.NORMALIZE_BY_VISIBLE_KEYPOINTS = True
+
+
+# ---------------------------------------------------------------------------- #
+# Body UV R-CNN options
+# ---------------------------------------------------------------------------- #
+__C.BODY_UV_RCNN = AttrDict()
+
+# The type of RoI head to use for body UV prediction
+__C.BODY_UV_RCNN.ROI_HEAD = ''
+
+# Output size (and size loss is computed on), e.g., 56x56
+__C.BODY_UV_RCNN.HEATMAP_SIZE = -1
+
+# Use bilinear interpolation to upsample the final heatmap by this factor
+__C.BODY_UV_RCNN.UP_SCALE = -1
+
+# Apply a ConvTranspose layer to the features prior to predicting the heatmaps
+__C.KRCNN.USE_DECONV = False
+# Channel dimension of the hidden representation produced by the ConvTranspose
+__C.BODY_UV_RCNN.DECONV_DIM = 256
+# Use a ConvTranspose layer to predict the heatmaps
+__C.BODY_UV_RCNN.USE_DECONV_OUTPUT = False
+# Use dilation in the body UV head
+__C.BODY_UV_RCNN.DILATION = 1
+# Size of the kernels to use in all ConvTranspose operations
+__C.BODY_UV_RCNN.DECONV_KERNEL = 4
+
+# Number of patches in the dataset
+__C.BODY_UV_RCNN.NUM_PATCHES = -1
+
+# Number of stacked Conv layers in body UV head
+__C.BODY_UV_RCNN.NUM_STACKED_CONVS = 8
+# Dimension of the hidden representation output by the body UV head
+__C.BODY_UV_RCNN.CONV_HEAD_DIM = 256
+# Conv kernel size used in the body UV head
+__C.BODY_UV_RCNN.CONV_HEAD_KERNEL = 3
+# Conv kernel weight filling function
+__C.BODY_UV_RCNN.CONV_INIT = 'GaussianFill'
+
+# Standard ROI XFORM options (see FAST_RCNN or MRCNN options)
+__C.BODY_UV_RCNN.ROI_XFORM_METHOD = 'RoIAlign'
+__C.BODY_UV_RCNN.ROI_XFORM_RESOLUTION = 7
+__C.BODY_UV_RCNN.ROI_XFORM_SAMPLING_RATIO = 0
+
+# Weights
+__C.BODY_UV_RCNN.INDEX_WEIGHTS = 5.0
+__C.BODY_UV_RCNN.PART_WEIGHTS = 1.0
+__C.BODY_UV_RCNN.POINT_REGRESSION_WEIGHTS = 0.001
+
+# Train only with images that have body uv annotations
+__C.BODY_UV_RCNN.BODY_UV_IMS = False
 
 
 # ---------------------------------------------------------------------------- #
@@ -971,9 +1013,6 @@ __C.EXPECTED_RESULTS = []
 # Absolute and relative tolerance to use when comparing to EXPECTED_RESULTS
 __C.EXPECTED_RESULTS_RTOL = 0.1
 __C.EXPECTED_RESULTS_ATOL = 0.005
-# When the expected value specifies a mean and standard deviation, we check
-# that the actual value is within mean +/- SIGMA_TOL * std
-__C.EXPECTED_RESULTS_SIGMA_TOL = 4
 # Set to send email in case of an EXPECTED_RESULTS failure
 __C.EXPECTED_RESULTS_EMAIL = ''
 
@@ -996,7 +1035,7 @@ __C.CLUSTER.ON_CLUSTER = False
 # If an option is removed from the code and you don't want to break existing
 # yaml configs, you can add the full config key as a string to the set below.
 # ---------------------------------------------------------------------------- #
-_DEPRECATED_KEYS = set(
+_DEPCRECATED_KEYS = set(
     {
         'FINAL_MSG',
         'MODEL.DILATION',
@@ -1099,9 +1138,9 @@ def cache_cfg_urls():
 
 def get_output_dir(datasets, training=True):
     """Get the output directory determined by the current global config."""
-    assert isinstance(datasets, tuple([tuple, list] + list(six.string_types))), \
+    assert isinstance(datasets, (tuple, list, basestring)), \
         'datasets argument must be of type tuple, list or string'
-    is_string = isinstance(datasets, six.string_types)
+    is_string = isinstance(datasets, basestring)
     dataset_name = datasets if is_string else ':'.join(datasets)
     tag = 'train' if training else 'test'
     # <output-dir>/<train|test>/<dataset-name>/<model-type>/
@@ -1200,7 +1239,7 @@ def _merge_a_into_b(a, b, stack=None):
 
 
 def _key_is_deprecated(full_key):
-    if full_key in _DEPRECATED_KEYS:
+    if full_key in _DEPCRECATED_KEYS:
         logger.warn(
             'Deprecated config key (ignoring): {}'.format(full_key)
         )
@@ -1234,7 +1273,7 @@ def _decode_cfg_value(v):
     if isinstance(v, dict):
         return AttrDict(v)
     # All remaining processing is only applied to strings
-    if not isinstance(v, six.string_types):
+    if not isinstance(v, basestring):
         return v
     # Try to interpret `v` as a:
     #   string, number, tuple, list, dict, boolean, or None
@@ -1272,7 +1311,7 @@ def _check_and_coerce_cfg_value_type(value_a, value_b, key, full_key):
     # Exceptions: numpy arrays, strings, tuple<->list
     if isinstance(value_b, np.ndarray):
         value_a = np.array(value_a, dtype=value_b.dtype)
-    elif isinstance(value_b, six.string_types):
+    elif isinstance(value_b, basestring):
         value_a = str(value_a)
     elif isinstance(value_a, tuple) and isinstance(value_b, list):
         value_a = list(value_a)

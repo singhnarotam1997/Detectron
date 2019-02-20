@@ -1,16 +1,8 @@
-# Copyright (c) 2017-present, Facebook, Inc.
+# Copyright (c) Facebook, Inc. and its affiliates.
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
 ##############################################################################
 
 """Helper functions for working with Caffe2 networks (i.e., operator graphs)."""
@@ -21,23 +13,22 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 from collections import OrderedDict
+import six.moves.cPickle as pickle
 import logging
 import numpy as np
 import os
 import pprint
-
+import yaml
+from detectron.utils.io import load_object
 from caffe2.python import core
 from caffe2.python import workspace
 
 from detectron.core.config import cfg
 from detectron.core.config import load_cfg
-from detectron.utils.io import load_object
 from detectron.utils.io import save_object
 import detectron.utils.c2 as c2_utils
-import detectron.utils.env as envu
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 
 def initialize_from_weights_file(model, weights_file, broadcast=True):
@@ -60,7 +51,6 @@ def initialize_gpu_from_weights_file(model, weights_file, gpu_id=0):
     logger.info('Loading weights from: {}'.format(weights_file))
     ws_blobs = workspace.Blobs()
     src_blobs = load_object(weights_file)
-
     if 'cfg' in src_blobs:
         saved_cfg = load_cfg(src_blobs['cfg'])
         configure_bbox_reg_weights(model, saved_cfg)
@@ -91,7 +81,7 @@ def initialize_gpu_from_weights_file(model, weights_file, gpu_id=0):
             dst_name = core.ScopedName(unscoped_param_name)
             has_momentum = src_name + '_momentum' in src_blobs
             has_momentum_str = ' [+ momentum]' if has_momentum else ''
-            logger.info(
+            logger.debug(
                 '{:s}{:} loaded from weights file into {:s}: {}'.format(
                     src_name, has_momentum_str, dst_name, src_blobs[src_name]
                     .shape
@@ -129,7 +119,7 @@ def initialize_gpu_from_weights_file(model, weights_file, gpu_id=0):
             with c2_utils.CpuScope():
                 workspace.FeedBlob(
                     '__preserve__/{:s}'.format(src_name), src_blobs[src_name])
-                logger.info(
+                logger.debug(
                     '{:s} preserved in workspace (unused)'.format(src_name))
 
 
@@ -165,7 +155,7 @@ def save_model_to_weights_file(weights_file, model):
                     ' {:s} -> {:s} (preserved)'.format(
                         scoped_name, unscoped_name))
                 blobs[unscoped_name] = workspace.FetchBlob(scoped_name)
-    cfg_yaml = envu.yaml_dump(cfg)
+    cfg_yaml = yaml.dump(cfg)
     save_object(dict(blobs=blobs, cfg=cfg_yaml), weights_file)
 
 

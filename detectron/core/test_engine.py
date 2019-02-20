@@ -1,16 +1,8 @@
-# Copyright (c) 2017-present, Facebook, Inc.
+# Copyright (c) Facebook, Inc. and its affiliates.
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
 ##############################################################################
 
 """Test a Detectron network on an imdb (image database)."""
@@ -26,6 +18,7 @@ import datetime
 import logging
 import numpy as np
 import os
+import yaml
 
 from caffe2.python import workspace
 
@@ -150,17 +143,19 @@ def test_net_on_dataset(
     test_timer.tic()
     if multi_gpu:
         num_images = len(dataset.get_roidb())
-        all_boxes, all_segms, all_keyps = multi_gpu_test_net_on_dataset(
-            weights_file, dataset_name, proposal_file, num_images, output_dir
-        )
+        all_boxes, all_segms, all_keyps, all_bodys = \
+            multi_gpu_test_net_on_dataset(
+                weights_file, dataset_name, proposal_file,
+                num_images, output_dir
+            )
     else:
-        all_boxes, all_segms, all_keyps = test_net(
+        all_boxes, all_segms, all_keyps, all_bodys = test_net(
             weights_file, dataset_name, proposal_file, output_dir, gpu_id=gpu_id
         )
     test_timer.toc()
     logger.info('Total inference time: {:.3f}s'.format(test_timer.average_time))
     results = task_evaluation.evaluate_all(
-        dataset, all_boxes, all_segms, all_keyps, output_dir
+        dataset, all_boxes, all_segms, all_keyps, all_bodys, output_dir
     )
     return results
 
@@ -191,27 +186,31 @@ def multi_gpu_test_net_on_dataset(
     all_boxes = [[] for _ in range(cfg.MODEL.NUM_CLASSES)]
     all_segms = [[] for _ in range(cfg.MODEL.NUM_CLASSES)]
     all_keyps = [[] for _ in range(cfg.MODEL.NUM_CLASSES)]
+    all_bodys = [[] for _ in range(cfg.MODEL.NUM_CLASSES)]
     for det_data in outputs:
         all_boxes_batch = det_data['all_boxes']
         all_segms_batch = det_data['all_segms']
         all_keyps_batch = det_data['all_keyps']
+        all_bodys_batch = det_data['all_bodys']
         for cls_idx in range(1, cfg.MODEL.NUM_CLASSES):
             all_boxes[cls_idx] += all_boxes_batch[cls_idx]
             all_segms[cls_idx] += all_segms_batch[cls_idx]
             all_keyps[cls_idx] += all_keyps_batch[cls_idx]
+            all_bodys[cls_idx] += all_bodys_batch[cls_idx]
     det_file = os.path.join(output_dir, 'detections.pkl')
-    cfg_yaml = envu.yaml_dump(cfg)
+    cfg_yaml = yaml.dump(cfg)
     save_object(
         dict(
             all_boxes=all_boxes,
             all_segms=all_segms,
             all_keyps=all_keyps,
+            all_bodys=all_bodys,
             cfg=cfg_yaml
         ), det_file
     )
     logger.info('Wrote detections to: {}'.format(os.path.abspath(det_file)))
 
-    return all_boxes, all_segms, all_keyps
+    return all_boxes, all_segms, all_keyps, all_bodys
 
 
 def test_net(
@@ -234,34 +233,39 @@ def test_net(
     model = initialize_model_from_cfg(weights_file, gpu_id=gpu_id)
     num_images = len(roidb)
     num_classes = cfg.MODEL.NUM_CLASSES
-    all_boxes, all_segms, all_keyps = empty_results(num_classes, num_images)
+    all_boxes, all_segms, all_keyps, all_bodys = \
+        empty_results(num_classes, num_images)
     timers = defaultdict(Timer)
     for i, entry in enumerate(roidb):
-        if cfg.TEST.PRECOMPUTED_PROPOSALS:
-            # The roidb may contain ground-truth rois (for example, if the roidb
-            # comes from the training or val split). We only want to evaluate
-            # detection on the *non*-ground-truth rois. We select only the rois
-            # that have the gt_classes field set to 0, which means there's no
-            # ground truth.
-            box_proposals = entry['boxes'][entry['gt_classes'] == 0]
-            if len(box_proposals) == 0:
-                continue
+        if 'has_no_densepose' in entry.keys():
+            pass
         else:
-            # Faster R-CNN type models generate proposals on-the-fly with an
-            # in-network RPN; 1-stage models don't require proposals.
-            box_proposals = None
+            if cfg.TEST.PRECOMPUTED_PROPOSALS:
+                # The roidb may contain ground-truth rois (for example, if the roidb
+                # comes from the training or val split). We only want to evaluate
+                # detection on the *non*-ground-truth rois. We select only the rois
+                # that have the gt_classes field set to 0, which means there's no
+                # ground truth.
+                box_proposals = entry['boxes'][entry['gt_classes'] == 0]
+                if len(box_proposals) == 0:
+                    continue
+            else:
+                # Faster R-CNN type models generate proposals on-the-fly with an
+                # in-network RPN; 1-stage models don't require proposals.
+                box_proposals = None
 
-        im = cv2.imread(entry['image'])
-        with c2_utils.NamedCudaScope(gpu_id):
-            cls_boxes_i, cls_segms_i, cls_keyps_i = im_detect_all(
-                model, im, box_proposals, timers
-            )
+            im = cv2.imread(entry['image'])
+            with c2_utils.NamedCudaScope(gpu_id):
+                cls_boxes_i, cls_segms_i, cls_keyps_i,cls_bodys_i = \
+                    im_detect_all(model, im, box_proposals, timers)
 
-        extend_results(i, all_boxes, cls_boxes_i)
-        if cls_segms_i is not None:
-            extend_results(i, all_segms, cls_segms_i)
-        if cls_keyps_i is not None:
-            extend_results(i, all_keyps, cls_keyps_i)
+            extend_results(i, all_boxes, cls_boxes_i)
+            if cls_segms_i is not None:
+                extend_results(i, all_segms, cls_segms_i)
+            if cls_keyps_i is not None:
+                extend_results(i, all_keyps, cls_keyps_i)
+            if cls_bodys_i is not None:
+                extend_results(i, all_bodys, cls_bodys_i)
 
         if i % 10 == 0:  # Reduce log file size
             ave_total_time = np.sum([t.average_time for t in timers.values()])
@@ -270,12 +274,14 @@ def test_net(
             det_time = (
                 timers['im_detect_bbox'].average_time +
                 timers['im_detect_mask'].average_time +
-                timers['im_detect_keypoints'].average_time
+                timers['im_detect_keypoints'].average_time +
+                timers['im_detect_body_uv'].average_time
             )
             misc_time = (
                 timers['misc_bbox'].average_time +
                 timers['misc_mask'].average_time +
-                timers['misc_keypoints'].average_time
+                timers['misc_keypoints'].average_time +
+                timers['misc_body_uv'].average_time
             )
             logger.info(
                 (
@@ -302,7 +308,7 @@ def test_net(
                 show_class=True
             )
 
-    cfg_yaml = envu.yaml_dump(cfg)
+    cfg_yaml = yaml.dump(cfg)
     if ind_range is not None:
         det_name = 'detection_range_%s_%s.pkl' % tuple(ind_range)
     else:
@@ -313,11 +319,12 @@ def test_net(
             all_boxes=all_boxes,
             all_segms=all_segms,
             all_keyps=all_keyps,
+            all_bodys=all_bodys,
             cfg=cfg_yaml
         ), det_file
     )
     logger.info('Wrote detections to: {}'.format(os.path.abspath(det_file)))
-    return all_boxes, all_segms, all_keyps
+    return all_boxes, all_segms, all_keyps, all_bodys
 
 
 def initialize_model_from_cfg(weights_file, gpu_id=0):
@@ -335,6 +342,8 @@ def initialize_model_from_cfg(weights_file, gpu_id=0):
         workspace.CreateNet(model.mask_net)
     if cfg.MODEL.KEYPOINTS_ON:
         workspace.CreateNet(model.keypoint_net)
+    if cfg.MODEL.BODY_UV_ON:
+        workspace.CreateNet(model.body_uv_net)
     return model
 
 
@@ -377,13 +386,16 @@ def empty_results(num_classes, num_images):
       [x, y, logit, prob] (See: utils.keypoints.heatmaps_to_keypoints).
       Keypoints are recorded for person (cls = 1); they are in 1:1
       correspondence with the boxes in all_boxes[cls][image].
+    Body uv predictions are collected into:
+      TODO
     """
     # Note: do not be tempted to use [[] * N], which gives N references to the
     # *same* empty list.
     all_boxes = [[[] for _ in range(num_images)] for _ in range(num_classes)]
     all_segms = [[[] for _ in range(num_images)] for _ in range(num_classes)]
     all_keyps = [[[] for _ in range(num_images)] for _ in range(num_classes)]
-    return all_boxes, all_segms, all_keyps
+    all_bodys = [[[] for _ in range(num_images)] for _ in range(num_classes)]
+    return all_boxes, all_segms, all_keyps, all_bodys
 
 
 def extend_results(index, all_res, im_res):

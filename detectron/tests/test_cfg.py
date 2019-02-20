@@ -1,16 +1,8 @@
-# Copyright (c) 2017-present, Facebook, Inc.
+# Copyright (c) Facebook, Inc. and its affiliates.
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
 ##############################################################################
 
 from __future__ import absolute_import
@@ -21,11 +13,11 @@ from __future__ import unicode_literals
 import copy
 import tempfile
 import unittest
+import yaml
 
 from detectron.core.config import cfg
 from detectron.utils.collections import AttrDict
 import detectron.core.config as core_config
-import detectron.utils.env as envu
 import detectron.utils.logging as logging_utils
 
 
@@ -59,7 +51,7 @@ class TestAttrDict(unittest.TestCase):
 
         # Serialize immutability state
         a.immutable(True)
-        a2 = core_config.load_cfg(envu.yaml_dump(a))
+        a2 = core_config.load_cfg(yaml.dump(a))
         assert a.is_immutable()
         assert a2.is_immutable()
 
@@ -81,7 +73,7 @@ class TestCfg(unittest.TestCase):
 
         # Test: merge from yaml
         s = 'dummy1'
-        cfg2 = core_config.load_cfg(envu.yaml_dump(cfg))
+        cfg2 = core_config.load_cfg(yaml.dump(cfg))
         cfg2.MODEL.TYPE = s
         core_config.merge_cfg_from_cfg(cfg2)
         assert cfg.MODEL.TYPE == s
@@ -119,7 +111,7 @@ class TestCfg(unittest.TestCase):
 
     def test_merge_cfg_from_file(self):
         with tempfile.NamedTemporaryFile() as f:
-            envu.yaml_dump(cfg, f)
+            yaml.dump(cfg, f)
             s = cfg.MODEL.TYPE
             cfg.MODEL.TYPE = 'dummy'
             assert cfg.MODEL.TYPE != s
@@ -161,7 +153,7 @@ class TestCfg(unittest.TestCase):
         with tempfile.NamedTemporaryFile() as f:
             cfg2 = copy.deepcopy(cfg)
             cfg2.MODEL.DILATION = 2
-            envu.yaml_dump(cfg2, f)
+            yaml.dump(cfg2, f)
             with self.assertRaises(AttributeError):
                 _ = cfg.MODEL.DILATION  # noqa
             core_config.merge_cfg_from_file(f.name)
@@ -187,7 +179,7 @@ class TestCfg(unittest.TestCase):
             cfg2.EXAMPLE = AttrDict()
             cfg2.EXAMPLE.RENAMED = AttrDict()
             cfg2.EXAMPLE.RENAMED.KEY = 'foobar'
-            envu.yaml_dump(cfg2, f)
+            yaml.dump(cfg2, f)
             with self.assertRaises(AttributeError):
                 _ = cfg.EXAMPLE.RENAMED.KEY  # noqa
             with self.assertRaises(KeyError):

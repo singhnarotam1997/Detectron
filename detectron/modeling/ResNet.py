@@ -1,16 +1,8 @@
-# Copyright (c) 2017-present, Facebook, Inc.
+# Copyright (c) Facebook, Inc. and its affiliates.
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
 ##############################################################################
 
 """Implements ResNet and ResNeXt.
@@ -88,11 +80,10 @@ def add_stage(
     return blob_in, dim_in
 
 
-def add_ResNet_convX_body(model, block_counts):
+def add_ResNet_convX_body(model, block_counts, freeze_at=2):
     """Add a ResNet body from input data up through the res5 (aka conv5) stage.
     The final res5/conv5 stage may be optionally excluded (hence convX, where
     X = 4 or 5)."""
-    freeze_at = cfg.TRAIN.FREEZE_AT
     assert freeze_at in [0, 2, 3, 4, 5]
 
     # add the stem (by default, conv1 and pool1 with bn; can support gn)

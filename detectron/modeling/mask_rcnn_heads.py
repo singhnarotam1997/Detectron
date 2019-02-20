@@ -1,16 +1,8 @@
-# Copyright (c) 2017-present, Facebook, Inc.
+# Copyright (c) Facebook, Inc. and its affiliates.
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
 ##############################################################################
 
 """Various network "heads" for predicting masks in Mask R-CNN.
@@ -51,11 +43,10 @@ def add_mask_rcnn_outputs(model, blob_in, dim):
     if cfg.MRCNN.USE_FC_OUTPUT:
         # Predict masks with a fully connected layer (ignore 'fcn' in the blob
         # name)
-        dim_fc = int(dim * (cfg.MRCNN.RESOLUTION / cfg.MRCNN.UPSAMPLE_RATIO)**2)
         blob_out = model.FC(
             blob_in,
             'mask_fcn_logits',
-            dim_fc,
+            dim,
             num_cls * cfg.MRCNN.RESOLUTION**2,
             weight_init=gauss_fill(0.001),
             bias_init=const_fill(0.0)

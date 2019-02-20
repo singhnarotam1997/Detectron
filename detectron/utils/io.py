@@ -1,16 +1,8 @@
-# Copyright (c) 2017-present, Facebook, Inc.
+# Copyright (c) Facebook, Inc. and its affiliates.
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
 ##############################################################################
 
 """IO utilities."""
@@ -20,34 +12,24 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import six.moves.cPickle as pickle
 import hashlib
 import logging
 import os
 import re
-import six
 import sys
-from six.moves import cPickle as pickle
-from six.moves import urllib
+import six
+import urllib.request as urllib2
 
 logger = logging.getLogger(__name__)
 
-_DETECTRON_S3_BASE_URL = 'https://dl.fbaipublicfiles.com/detectron'
 
-
-def save_object(obj, file_name, pickle_format=2):
-    """Save a Python object by pickling it.
-
-Unless specifically overridden, we want to save it in Pickle format=2 since this
-will allow other Python2 executables to load the resulting Pickle. When we want
-to completely remove Python2 backward-compatibility, we can bump it up to 3. We
-should never use pickle.HIGHEST_PROTOCOL as far as possible if the resulting
-file is manifested or used, external to the system.
-    """
+def save_object(obj, file_name):
+    """Save a Python object by pickling it."""
     file_name = os.path.abspath(file_name)
     with open(file_name, 'wb') as f:
-        pickle.dump(obj, f, pickle_format)
-
-
+        pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
+        
 def load_object(file_name):
     with open(file_name, 'rb') as f:
         # The default encoding used while unpickling is 7-bit (ASCII.) However,
@@ -61,27 +43,24 @@ def load_object(file_name):
         else:
             return pickle.load(f, encoding='latin1')
 
-
 def cache_url(url_or_file, cache_dir):
     """Download the file specified by the URL to the cache_dir and return the
     path to the cached file. If the argument is not a URL, simply return it as
     is.
     """
-    is_url = re.match(
-        r'^(?:http)s?://', url_or_file, re.IGNORECASE
-    ) is not None
+    is_url = re.match(r'^(?:http)s?://', url_or_file, re.IGNORECASE) is not None
 
     if not is_url:
         return url_or_file
-
+    #
     url = url_or_file
-    assert url.startswith(_DETECTRON_S3_BASE_URL), \
-        ('Detectron only automatically caches URLs in the Detectron S3 '
-         'bucket: {}').format(_DETECTRON_S3_BASE_URL)
-
-    cache_file_path = url.replace(_DETECTRON_S3_BASE_URL, cache_dir)
+    #
+    Len_filename  = len( url.split('/')[-1] )
+    BASE_URL  =  url[0:-Len_filename-1]
+    #
+    cache_file_path = url.replace(BASE_URL, cache_dir)
     if os.path.exists(cache_file_path):
-        assert_cache_file_is_ok(url, cache_file_path)
+        #assert_cache_file_is_ok(url, cache_file_path)
         return cache_file_path
 
     cache_file_dir = os.path.dirname(cache_file_path)
@@ -90,7 +69,7 @@ def cache_url(url_or_file, cache_dir):
 
     logger.info('Downloading remote file {} to {}'.format(url, cache_file_path))
     download_url(url, cache_file_path)
-    assert_cache_file_is_ok(url, cache_file_path)
+    #assert_cache_file_is_ok(url, cache_file_path)
     return cache_file_path
 
 
@@ -135,11 +114,8 @@ def download_url(
     Credit:
     https://stackoverflow.com/questions/2028517/python-urllib2-progress-hook
     """
-    response = urllib.request.urlopen(url)
-    if six.PY2:
-        total_size = response.info().getheader('Content-Length').strip()
-    else:
-        total_size = response.info().get('Content-Length').strip()
+    response = urllib2.urlopen(url)
+    total_size = response.info().getheader('Content-Length').strip()
     total_size = int(total_size)
     bytes_so_far = 0
 
@@ -159,13 +135,13 @@ def download_url(
 def _get_file_md5sum(file_name):
     """Compute the md5 hash of a file."""
     hash_obj = hashlib.md5()
-    with open(file_name, 'rb') as f:
+    with open(file_name, 'r') as f:
         hash_obj.update(f.read())
-    return hash_obj.hexdigest().encode('utf-8')
+    return hash_obj.hexdigest()
 
 
 def _get_reference_md5sum(url):
     """By convention the md5 hash for url is stored in url + '.md5sum'."""
     url_md5sum = url + '.md5sum'
-    md5sum = urllib.request.urlopen(url_md5sum).read().strip()
+    md5sum = urllib2.urlopen(url_md5sum).read().strip()
     return md5sum

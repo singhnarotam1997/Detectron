@@ -1,16 +1,8 @@
-# Copyright (c) 2017-present, Facebook, Inc.
+# Copyright (c) Facebook, Inc. and its affiliates.
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
 ##############################################################################
 #
 # Based on:
@@ -33,6 +25,7 @@ import datetime
 import logging
 import numpy as np
 import os
+import yaml
 
 from caffe2.python import core
 from caffe2.python import workspace
@@ -110,7 +103,7 @@ def multi_gpu_generate_rpn_on_dataset(
         scores += rpn_data['scores']
         ids += rpn_data['ids']
     rpn_file = os.path.join(output_dir, 'rpn_proposals.pkl')
-    cfg_yaml = envu.yaml_dump(cfg)
+    cfg_yaml = yaml.dump(cfg)
     save_object(
         dict(boxes=boxes, scores=scores, ids=ids, cfg=cfg_yaml), rpn_file
     )
@@ -154,7 +147,7 @@ def generate_rpn_on_range(
         gpu_id=gpu_id,
     )
 
-    cfg_yaml = envu.yaml_dump(cfg)
+    cfg_yaml = yaml.dump(cfg)
     if ind_range is not None:
         rpn_name = 'rpn_proposals_range_%s_%s.pkl' % tuple(ind_range)
     else:

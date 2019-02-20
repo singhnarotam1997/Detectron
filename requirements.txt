@@ -6,6 +6,5 @@ setuptools
 Cython
 mock
 scipy
-six
-future
-protobuf
+h5py
+memory_profiler

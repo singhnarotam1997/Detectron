@@ -1,18 +1,8 @@
-#!/usr/bin/env python
-
-# Copyright (c) 2017-present, Facebook, Inc.
+# Copyright (c) Facebook, Inc. and its affiliates.
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
 ##############################################################################
 
 """Perform inference on a single image or all images with a certain extension
@@ -32,6 +22,7 @@ import cv2  # NOQA (Must import before importing caffe2 due to bug in cv2)
 import logging
 import os
 import sys
+import yaml
 
 from caffe2.python import workspace
 
@@ -46,7 +37,6 @@ import detectron.core.rpn_generator as rpn_engine
 import detectron.core.test_engine as model_engine
 import detectron.datasets.dummy_datasets as dummy_datasets
 import detectron.utils.c2 as c2_utils
-import detectron.utils.env as envu
 import detectron.utils.vis as vis_utils
 
 c2_utils.import_detectron_ops()
@@ -56,10 +46,9 @@ c2_utils.import_detectron_ops()
 cv2.ocl.setUseOpenCL(False)
 
 # infer.py
-#   --im [path/to/image.jpg] \
-#   --rpn-model [path/to/rpn/model.pkl] \
-#   --rpn-cfg [path/to/rpn/config.yaml] \
-#   --output-dir [path/to/output/dir] \
+#   --im [path/to/image.jpg]
+#   --rpn-model [path/to/rpn/model.pkl]
+#   --rpn-config [path/to/rpn/config.yaml]
 #   [model1] [config1] [model2] [config2] ...
 
 
@@ -91,7 +80,7 @@ def parse_args():
     )
     parser.add_argument(
         'models_to_run',
-        help='pairs of models & configs, listed like so: [pkl1] [yaml1] [pkl2] [yaml2] ...',
+        help='list of pkl, yaml pairs',
         default=None,
         nargs=argparse.REMAINDER
     )
@@ -119,7 +108,7 @@ def get_rpn_box_proposals(im, args):
 def main(args):
     logger = logging.getLogger(__name__)
     dummy_coco_dataset = dummy_datasets.get_coco_dataset()
-    cfg_orig = load_cfg(envu.yaml_dump(cfg))
+    cfg_orig = load_cfg(yaml.dump(cfg))
     im = cv2.imread(args.im_file)
 
     if args.rpn_pkl is not None:
@@ -128,7 +117,7 @@ def main(args):
     else:
         proposal_boxes = None
 
-    cls_boxes, cls_segms, cls_keyps = None, None, None
+    cls_boxes, cls_segms, cls_keyps, cls_bodys = None, None, None, None
     for i in range(0, len(args.models_to_run), 2):
         pkl = args.models_to_run[i]
         yml = args.models_to_run[i + 1]
@@ -143,17 +132,26 @@ def main(args):
         assert_and_infer_cfg(cache_urls=False)
         model = model_engine.initialize_model_from_cfg(weights_file)
         with c2_utils.NamedCudaScope(0):
-            cls_boxes_, cls_segms_, cls_keyps_ = \
+            cls_boxes_, cls_segms_, cls_keyps_ , cls_bodys_= \
                 model_engine.im_detect_all(model, im, proposal_boxes)
         cls_boxes = cls_boxes_ if cls_boxes_ is not None else cls_boxes
         cls_segms = cls_segms_ if cls_segms_ is not None else cls_segms
         cls_keyps = cls_keyps_ if cls_keyps_ is not None else cls_keyps
+        cls_bodys = cls_bodys_ if cls_bodys_ is not None else cls_bodys
+
         workspace.ResetWorkspace()
 
     out_name = os.path.join(
         args.output_dir, '{}'.format(os.path.basename(args.im_file) + '.pdf')
     )
     logger.info('Processing {} -> {}'.format(args.im_file, out_name))
+    
+    import numpy as np
+    import pickle
+
+    f = open('test_vis.pkl','w')
+    pickle.dump({'im':im , 'cls_boxes':np.array(cls_boxes) , 'cls_bodys':np.array(cls_bodys) },f)
+    f.close()
 
     vis_utils.vis_one_image(
         im[:, :, ::-1],
@@ -162,6 +160,7 @@ def main(args):
         cls_boxes,
         cls_segms,
         cls_keyps,
+        cls_bodys,
         dataset=dummy_coco_dataset,
         box_alpha=0.3,
         show_class=True,

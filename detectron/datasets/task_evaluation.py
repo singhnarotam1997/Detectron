@@ -1,16 +1,8 @@
-# Copyright (c) 2017-present, Facebook, Inc.
+# Copyright (c) Facebook, Inc. and its affiliates.
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
 ##############################################################################
 
 """Evaluation interface for supported tasks (box detection, instance
@@ -51,7 +43,8 @@ logger = logging.getLogger(__name__)
 
 
 def evaluate_all(
-    dataset, all_boxes, all_segms, all_keyps, output_dir, use_matlab=False
+    dataset, all_boxes, all_segms, all_keyps, all_bodys,
+    output_dir, use_matlab=False
 ):
     """Evaluate "all" tasks, where "all" includes box detection, instance
     segmentation, and keypoint detection.
@@ -68,6 +61,10 @@ def evaluate_all(
         results = evaluate_keypoints(dataset, all_boxes, all_keyps, output_dir)
         all_results[dataset.name].update(results[dataset.name])
         logger.info('Evaluating keypoints is done!')
+    if cfg.MODEL.BODY_UV_ON:
+        results = evaluate_body_uv(dataset, all_boxes, all_bodys, output_dir)
+        all_results[dataset.name].update(results[dataset.name])
+        logger.info('Evaluating body uv is done!')
     return all_results
 
 
@@ -135,8 +132,8 @@ def evaluate_keypoints(dataset, all_boxes, all_keyps, output_dir):
     """Evaluate human keypoint detection (i.e., 2D pose estimation)."""
     logger.info('Evaluating detections')
     not_comp = not cfg.TEST.COMPETITION_MODE
-    assert dataset.name.startswith('keypoints_coco_'), \
-        'Only COCO keypoints are currently supported'
+    #assert dataset.name.startswith('keypoints_coco_'), \
+    #    'Only COCO keypoints are currently supported'
     coco_eval = json_dataset_evaluator.evaluate_keypoints(
         dataset,
         all_boxes,
@@ -147,6 +144,22 @@ def evaluate_keypoints(dataset, all_boxes, all_keyps, output_dir):
     )
     keypoint_results = _coco_eval_to_keypoint_results(coco_eval)
     return OrderedDict([(dataset.name, keypoint_results)])
+
+
+def evaluate_body_uv(dataset, all_boxes, all_bodys, output_dir):
+    """Evaluate human body uv (i.e. dense pose estimation)."""
+    logger.info('Evaluating body uv')
+    not_comp = not cfg.TEST.COMPETITION_MODE
+    coco_eval = json_dataset_evaluator.evaluate_body_uv(
+        dataset,
+        all_boxes,
+        all_bodys,
+        output_dir,
+        use_salt=not_comp,
+        cleanup=not_comp
+    )
+    body_uv_results = _coco_eval_to_body_uv_results(coco_eval)
+    return OrderedDict([(dataset.name, body_uv_results)])
 
 
 def evaluate_box_proposals(dataset, roidb):
@@ -195,11 +208,6 @@ def check_expected_results(results, atol=0.005, rtol=0.1):
     Expected results should take the form of a list of expectations, each
     specified by four elements: [dataset, task, metric, expected value]. For
     example: [['coco_2014_minival', 'box_proposal', 'AR@1000', 0.387], ...].
-
-    The expected value may also be formatted as a list [mean, std] providing
-    an empirical mean and standard deviation from which a valid range is computed
-    using cfg.EXPECTED_RESULTS_SIGMA_TOL. For example:
-    [['coco_2014_minival', 'box_proposal', 'AR@1000', [0.387, 0.001]], ...]
     """
     # cfg contains a reference set of results that we want to check against
     if len(cfg.EXPECTED_RESULTS) == 0:
@@ -211,28 +219,13 @@ def check_expected_results(results, atol=0.005, rtol=0.1):
         assert metric in results[dataset][task], \
             'Metric {} not in results'.format(metric)
         actual_val = results[dataset][task][metric]
-        ok = False
-        if isinstance(expected_val, list):
-            assert len(expected_val) == 2, (
-                'Expected result must be in (mean, std) format'
-            )
-            mean, std = expected_val
-            lo = mean - cfg.EXPECTED_RESULTS_SIGMA_TOL * std
-            hi = mean + cfg.EXPECTED_RESULTS_SIGMA_TOL * std
-            ok = (lo < actual_val) and (actual_val < hi)
-            msg = (
-                '{} > {} > {} sanity check (actual vs. expected): '
-                '{:.3f} vs. mean={:.4f}, std={:.4}, range=({:.4f}, {:.4f})'
-            ).format(dataset, task, metric, actual_val, mean, std, lo, hi)
-        else:
-            err = abs(actual_val - expected_val)
-            tol = atol + rtol * abs(expected_val)
-            ok = (err > tol)
-            msg = (
-                '{} > {} > {} sanity check (actual vs. expected): '
-                '{:.3f} vs. {:.3f}, err={:.3f}, tol={:.3f}'
-            ).format(dataset, task, metric, actual_val, expected_val, err, tol)
-        if not ok:
+        err = abs(actual_val - expected_val)
+        tol = atol + rtol * abs(expected_val)
+        msg = (
+            '{} > {} > {} sanity check (actual vs. expected): '
+            '{:.3f} vs. {:.3f}, err={:.3f}, tol={:.3f}'
+        ).format(dataset, task, metric, actual_val, expected_val, err, tol)
+        if err > tol:
             msg = 'FAIL: ' + msg
             logger.error(msg)
             if cfg.EXPECTED_RESULTS_EMAIL != '':
@@ -288,6 +281,10 @@ COCO_APL = 5
 # Slight difference for keypoints
 COCO_KPS_APM = 3
 COCO_KPS_APL = 4
+# Difference for body uv
+COCO_BODY_UV_AP75 = 6
+COCO_BODY_UV_APM = 11
+COCO_BODY_UV_APL = 12
 
 
 # ---------------------------------------------------------------------------- #
@@ -329,6 +326,18 @@ def _coco_eval_to_keypoint_results(coco_eval):
         res['keypoint']['AP75'] = s[COCO_AP75]
         res['keypoint']['APm'] = s[COCO_KPS_APM]
         res['keypoint']['APl'] = s[COCO_KPS_APL]
+    return res
+
+
+def _coco_eval_to_body_uv_results(coco_eval):
+    res = _empty_body_uv_results()
+    if coco_eval is not None:
+        s = coco_eval.stats
+        res['body_uv']['AP'] = s[COCO_AP]
+        res['body_uv']['AP50'] = s[COCO_AP50]
+        res['body_uv']['AP75'] = s[COCO_BODY_UV_AP75]
+        res['body_uv']['APm'] = s[COCO_BODY_UV_APM]
+        res['body_uv']['APl'] = s[COCO_BODY_UV_APL]
     return res
 
 
@@ -377,6 +386,21 @@ def _empty_mask_results():
 def _empty_keypoint_results():
     return OrderedDict({
         'keypoint':
+        OrderedDict(
+            [
+                ('AP', -1),
+                ('AP50', -1),
+                ('AP75', -1),
+                ('APm', -1),
+                ('APl', -1),
+            ]
+        )
+    })
+
+
+def _empty_body_uv_results():
+    return OrderedDict({
+        'body_uv':
         OrderedDict(
             [
                 ('AP', -1),

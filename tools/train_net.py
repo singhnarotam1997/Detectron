@@ -1,18 +1,8 @@
-#!/usr/bin/env python
-
-# Copyright (c) 2017-present, Facebook, Inc.
+# Copyright (c) Facebook, Inc. and its affiliates.
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
 ##############################################################################
 
 """Train a network with Detectron."""
@@ -42,6 +32,7 @@ import detectron.utils.train
 
 c2_utils.import_contrib_ops()
 c2_utils.import_detectron_ops()
+c2_utils.import_custom_ops()
 
 # OpenCL may be enabled by default in OpenCV3; disable it because it's not
 # thread safe and causes unwanted GPU memory allocations.
@@ -99,10 +90,6 @@ def main():
     if args.opts is not None:
         merge_cfg_from_list(args.opts)
     assert_and_infer_cfg()
-    smi_output, cuda_ver, cudnn_ver = c2_utils.get_nvidia_info()
-    logger.info("cuda version : {}".format(cuda_ver))
-    logger.info("cudnn version: {}".format(cudnn_ver))
-    logger.info("nvidia-smi output:\n{}".format(smi_output))
     logger.info('Training with config:')
     logger.info(pprint.pformat(cfg))
     # Note that while we set the numpy random seed network training will not be

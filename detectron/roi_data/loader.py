@@ -1,16 +1,8 @@
-# Copyright (c) 2017-present, Facebook, Inc.
+# Copyright (c) Facebook, Inc. and its affiliates.
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
 ##############################################################################
 
 """Detectron data loader. The design is generic and abstracted away from any
@@ -44,11 +36,11 @@ from collections import deque
 from collections import OrderedDict
 import logging
 import numpy as np
+import queue as Queue
 import signal
 import threading
 import time
 import uuid
-from six.moves import queue as Queue
 
 from caffe2.python import core, workspace
 
@@ -224,7 +216,6 @@ class RoIDataLoader(object):
 
     def start(self, prefill=False):
         for w in self._workers + self._enqueuers:
-            w.setDaemon(True)
             w.start()
         if prefill:
             logger.info('Pre-filling mini-batch queue...')
@@ -240,9 +231,6 @@ class RoIDataLoader(object):
                 if self.coordinator.should_stop():
                     self.shutdown()
                     break
-
-    def has_stopped(self):
-        return self.coordinator.should_stop()
 
     def shutdown(self):
         self.coordinator.request_stop()

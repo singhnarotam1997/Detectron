@@ -1,16 +1,8 @@
-# Copyright (c) 2017-present, Facebook, Inc.
+# Copyright (c) Facebook, Inc. and its affiliates.
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
 ##############################################################################
 
 """Test a RetinaNet network on an image database"""
@@ -164,17 +156,8 @@ def im_detect_bbox(model, im, timers=None):
     for cls, boxes in boxes_all.items():
         cls_dets = np.vstack(boxes).astype(dtype=np.float32)
         # do class specific nms here
-        if cfg.TEST.SOFT_NMS.ENABLED:
-            cls_dets, keep = box_utils.soft_nms(
-                cls_dets,
-                sigma=cfg.TEST.SOFT_NMS.SIGMA,
-                overlap_thresh=cfg.TEST.NMS,
-                score_thresh=0.0001,
-                method=cfg.TEST.SOFT_NMS.METHOD
-            )
-        else:
-            keep = box_utils.nms(cls_dets, cfg.TEST.NMS)
-            cls_dets = cls_dets[keep, :]
+        keep = box_utils.nms(cls_dets, cfg.TEST.NMS)
+        cls_dets = cls_dets[keep, :]
         out = np.zeros((len(keep), 6))
         out[:, 0:5] = cls_dets
         out[:, 5].fill(cls)

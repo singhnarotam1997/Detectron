@@ -1,18 +1,8 @@
-#!/usr/bin/env python
-
-# Copyright (c) 2017-present, Facebook, Inc.
+# Copyright (c) Facebook, Inc. and its affiliates.
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
 ##############################################################################
 
 """Script for visualizing results saved in a detections.pkl file."""
@@ -23,12 +13,12 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import argparse
+import cPickle as pickle
 import cv2
 import os
 import sys
 
 from detectron.datasets.json_dataset import JsonDataset
-from detectron.utils.io import load_object
 import detectron.utils.vis as vis_utils
 
 # OpenCL may be enabled by default in OpenCV3; disable it because it's not
@@ -84,7 +74,8 @@ def vis(dataset, detections_pkl, thresh, output_dir, limit=0):
     ds = JsonDataset(dataset)
     roidb = ds.get_roidb()
 
-    dets = load_object(detections_pkl)
+    with open(detections_pkl, 'r') as f:
+        dets = pickle.load(f)
 
     assert all(k in dets for k in ['all_boxes', 'all_segms', 'all_keyps']), \
         'Expected detections pkl file in the format used by test_engine.py'

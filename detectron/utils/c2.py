@@ -1,16 +1,8 @@
-# Copyright (c) 2017-present, Facebook, Inc.
+# Copyright (c) Facebook, Inc. and its affiliates.
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
 ##############################################################################
 
 """Helpful utilities for working with Caffe2."""
@@ -22,13 +14,11 @@ from __future__ import unicode_literals
 
 from six import string_types
 import contextlib
-import subprocess
 
 from caffe2.proto import caffe2_pb2
 from caffe2.python import core
 from caffe2.python import dyndep
 from caffe2.python import scope
-from caffe2.python import workspace
 
 import detectron.utils.env as envu
 
@@ -147,20 +137,3 @@ def gauss_fill(std):
 def const_fill(value):
     """Constant fill helper to reduce verbosity."""
     return ('ConstantFill', {'value': value})
-
-
-def get_nvidia_info():
-    return (
-        get_nvidia_smi_output(),
-        workspace.GetCUDAVersion(),
-        workspace.GetCuDNNVersion(),
-    )
-
-
-def get_nvidia_smi_output():
-    try:
-        info = subprocess.check_output(["nvidia-smi"], stderr=subprocess.STDOUT)
-        info = info.decode("utf8")
-    except Exception as e:
-        info = "Executing nvidia-smi failed: " + str(e)
-    return info.strip()

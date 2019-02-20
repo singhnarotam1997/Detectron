@@ -1,16 +1,8 @@
-# Copyright (c) 2017-present, Facebook, Inc.
+# Copyright (c) Facebook, Inc. and its affiliates.
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
 ##############################################################################
 
 """Detection output visualization module."""
@@ -113,7 +105,6 @@ def vis_mask(img, mask, col, alpha=0.4, show_border=True, border_thick=1):
 
 def vis_class(img, pos, class_str, font_scale=0.35):
     """Visualizes the class."""
-    img = img.astype(np.uint8)
     x0, y0 = int(pos[0]), int(pos[1])
     # Compute text size.
     txt = class_str
@@ -131,7 +122,6 @@ def vis_class(img, pos, class_str, font_scale=0.35):
 
 def vis_bbox(img, bbox, thick=1):
     """Visualizes a bounding box."""
-    img = img.astype(np.uint8)
     (x0, y0, w, h) = bbox
     x1, y1 = int(x0 + w), int(y0 + h)
     x0, y0 = int(x0), int(y0)
@@ -251,9 +241,9 @@ def vis_one_image_opencv(
 
 
 def vis_one_image(
-        im, im_name, output_dir, boxes, segms=None, keypoints=None, thresh=0.9,
+        im, im_name, output_dir, boxes, segms=None, keypoints=None, body_uv=None, thresh=0.9,
         kp_thresh=2, dpi=200, box_alpha=0.0, dataset=None, show_class=False,
-        ext='pdf', out_when_no_box=False):
+        ext='pdf'):
     """Visual debugging of detections."""
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -262,7 +252,7 @@ def vis_one_image(
         boxes, segms, keypoints, classes = convert_from_cls_format(
             boxes, segms, keypoints)
 
-    if (boxes is None or boxes.shape[0] == 0 or max(boxes[:, 4]) < thresh) and not out_when_no_box:
+    if boxes is None or boxes.shape[0] == 0 or max(boxes[:, 4]) < thresh:
         return
 
     dataset_keypoints, _ = keypoint_utils.get_keypoints()
@@ -283,12 +273,9 @@ def vis_one_image(
     fig.add_axes(ax)
     ax.imshow(im)
 
-    if boxes is None:
-        sorted_inds = [] # avoid crash when 'boxes' is None
-    else:
-        # Display in largest to smallest order to reduce occlusion
-        areas = (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1])
-        sorted_inds = np.argsort(-areas)
+    # Display in largest to smallest order to reduce occlusion
+    areas = (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1])
+    sorted_inds = np.argsort(-areas)
 
     mask_color_id = 0
     for i in sorted_inds:
@@ -388,7 +375,46 @@ def vis_one_image(
                 plt.setp(
                     line, color=colors[len(kp_lines) + 1], linewidth=1.0,
                     alpha=0.7)
-
+                
+    #   DensePose Visualization Starts!!
+    ##  Get full IUV image out 
+    IUV_fields = body_uv[1]
+    #
+    All_Coords = np.zeros(im.shape)
+    All_inds = np.zeros([im.shape[0],im.shape[1]])
+    K = 26
+    ##
+    inds = np.argsort(boxes[:,4])
+    ##
+    for i, ind in enumerate(inds):
+        entry = boxes[ind,:]
+        if entry[4] > 0.65:
+            entry=entry[0:4].astype(int)
+            ####
+            output = IUV_fields[ind]
+            ####
+            All_Coords_Old = All_Coords[ entry[1] : entry[1]+output.shape[1],entry[0]:entry[0]+output.shape[2],:]
+            All_Coords_Old[All_Coords_Old==0]=output.transpose([1,2,0])[All_Coords_Old==0]
+            All_Coords[ entry[1] : entry[1]+output.shape[1],entry[0]:entry[0]+output.shape[2],:]= All_Coords_Old
+            ###
+            CurrentMask = (output[0,:,:]>0).astype(np.float32)
+            All_inds_old = All_inds[ entry[1] : entry[1]+output.shape[1],entry[0]:entry[0]+output.shape[2]]
+            All_inds_old[All_inds_old==0] = CurrentMask[All_inds_old==0]*i
+            All_inds[ entry[1] : entry[1]+output.shape[1],entry[0]:entry[0]+output.shape[2]] = All_inds_old
+    #
+    All_Coords[:,:,1:3] = 255. * All_Coords[:,:,1:3]
+    All_Coords[All_Coords>255] = 255.
+    All_Coords = All_Coords.astype(np.uint8)
+    All_inds = All_inds.astype(np.uint8)
+    #
+    IUV_SaveName = os.path.basename(im_name).split('.')[0]+'_IUV.png'
+    INDS_SaveName = os.path.basename(im_name).split('.')[0]+'_INDS.png'
+    cv2.imwrite(os.path.join(output_dir, '{}'.format(IUV_SaveName)), All_Coords )
+    cv2.imwrite(os.path.join(output_dir, '{}'.format(INDS_SaveName)), All_inds )
+    print('IUV written to: ' , os.path.join(output_dir, '{}'.format(IUV_SaveName)) )
+    ###
+    ### DensePose Visualization Done!!
+    #
     output_name = os.path.basename(im_name) + '.' + ext
     fig.savefig(os.path.join(output_dir, '{}'.format(output_name)), dpi=dpi)
     plt.close('all')

@@ -1,18 +1,8 @@
-#!/usr/bin/env python
-
-# Copyright (c) 2017-present, Facebook, Inc.
+# Copyright (c) Facebook, Inc. and its affiliates.
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
 ##############################################################################
 
 """Perform inference on a single image or all images with a certain extension
@@ -84,33 +74,6 @@ def parse_args():
         type=str
     )
     parser.add_argument(
-        '--always-out',
-        dest='out_when_no_box',
-        help='output image even when no object is found',
-        action='store_true'
-    )
-    parser.add_argument(
-        '--output-ext',
-        dest='output_ext',
-        help='output image file format (default: pdf)',
-        default='pdf',
-        type=str
-    )
-    parser.add_argument(
-        '--thresh',
-        dest='thresh',
-        help='Threshold for visualizing detections',
-        default=0.7,
-        type=float
-    )
-    parser.add_argument(
-        '--kp-thresh',
-        dest='kp_thresh',
-        help='Threshold for visualizing keypoints',
-        default=2.0,
-        type=float
-    )
-    parser.add_argument(
         'im_or_folder', help='image or folder of images', default=None
     )
     if len(sys.argv) == 1:
@@ -121,17 +84,10 @@ def parse_args():
 
 def main(args):
     logger = logging.getLogger(__name__)
-
     merge_cfg_from_file(args.cfg)
     cfg.NUM_GPUS = 1
     args.weights = cache_url(args.weights, cfg.DOWNLOAD_CACHE)
     assert_and_infer_cfg(cache_urls=False)
-
-    assert not cfg.MODEL.RPN_ONLY, \
-        'RPN models are not supported'
-    assert not cfg.TEST.PRECOMPUTED_PROPOSALS, \
-        'Models that require precomputed proposals are not supported'
-
     model = infer_engine.initialize_model_from_cfg(args.weights)
     dummy_coco_dataset = dummy_datasets.get_coco_dataset()
 
@@ -142,14 +98,14 @@ def main(args):
 
     for i, im_name in enumerate(im_list):
         out_name = os.path.join(
-            args.output_dir, '{}'.format(os.path.basename(im_name) + '.' + args.output_ext)
+            args.output_dir, '{}'.format(os.path.basename(im_name) + '.pdf')
         )
         logger.info('Processing {} -> {}'.format(im_name, out_name))
         im = cv2.imread(im_name)
         timers = defaultdict(Timer)
         t = time.time()
         with c2_utils.NamedCudaScope(0):
-            cls_boxes, cls_segms, cls_keyps = infer_engine.im_detect_all(
+            cls_boxes, cls_segms, cls_keyps, cls_bodys = infer_engine.im_detect_all(
                 model, im, None, timers=timers
             )
         logger.info('Inference time: {:.3f}s'.format(time.time() - t))
@@ -168,13 +124,12 @@ def main(args):
             cls_boxes,
             cls_segms,
             cls_keyps,
+            cls_bodys,
             dataset=dummy_coco_dataset,
             box_alpha=0.3,
             show_class=True,
-            thresh=args.thresh,
-            kp_thresh=args.kp_thresh,
-            ext=args.output_ext,
-            out_when_no_box=args.out_when_no_box
+            thresh=0.7,
+            kp_thresh=2
         )
 
 
